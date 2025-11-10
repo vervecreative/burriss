@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ohio State House District 7 - Find Your District</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .search-container {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .search-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .search-header h2 {
+            margin: 0 0 10px 0;
+            color: #1a73e8;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .search-header p {
+            margin: 0;
+            color: #5f6368;
+            font-size: 14px;
+        }
+        
+        .search-box {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        #address-input {
+            width: 100%;
+            padding: 15px 50px 15px 20px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 50px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        #address-input:focus {
+            border-color: #1a73e8;
+        }
+        
+        #search-btn {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        
+        #search-btn:hover {
+            background: #1557b0;
+        }
+        
+        #search-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .result-message {
+            max-width: 600px;
+            margin: 15px auto 0;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .result-message.success {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            color: #2e7d32;
+            display: block;
+        }
+        
+        .result-message.error {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            color: #c62828;
+            display: block;
+        }
+        
+        .result-message.info {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            color: #e65100;
+            display: block;
+        }
+        
+        .result-message strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        #map {
+            flex: 1;
+            min-height: 400px;
+        }
+        
+        .info-window {
+            font-family: Arial, sans-serif;
+            max-width: 300px;
+        }
+        
+        .info-window h3 {
+            margin: 0 0 10px 0;
+            color: #1a73e8;
+            font-size: 18px;
+        }
+        
+        .info-window p {
+            margin: 5px 0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .info-window ul {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+        
+        .info-window li {
+            font-size: 14px;
+            margin: 3px 0;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .search-container {
+                padding: 15px;
+            }
+            
+            .search-header h2 {
+                font-size: 20px;
+            }
+            
+            #address-input {
+                font-size: 14px;
+                padding: 12px 45px 12px 15px;
+            }
+            
+            #search-btn {
+                padding: 8px 15px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="search-container">
+            <div class="search-header">
+                <h2>Ohio State House District 7</h2>
+                <p>Enter your address to see if you're in District 7</p>
+            </div>
+            
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="address-input" 
+                    placeholder="Enter your address (e.g., 123 Main St, Columbus, OH)"
+                    autocomplete="off"
+                />
+                <button id="search-btn" onclick="searchAddress()">Search</button>
+            </div>
+            
+            <div id="result-message" class="result-message"></div>
+        </div>
+        
+        <div id="map"></div>
+    </div>
+
+    <script>
+        let map;
+        let geocoder;
+        let districtPolygon;
+        let searchMarker;
+        let autocomplete;
+
+        // Approximate boundary coordinates for Ohio House District 7
+        // Covers Upper Arlington, Grandview Heights, and portions of Columbus
+        const districtBoundary = [
+            { lat: 40.0410, lng: -83.0980 },
+            { lat: 40.0410, lng: -83.0100 },
+            { lat: 40.0050, lng: -83.0000 },
+            { lat: 39.9650, lng: -83.0000 },
+            { lat: 39.9600, lng: -83.0300 },
+            { lat: 39.9600, lng: -83.0800 },
+            { lat: 39.9850, lng: -83.1000 },
+            { lat: 40.0300, lng: -83.1100 },
+            { lat: 40.0410, lng: -83.0980 }
+        ];
+
+        function initMap() {
+            const districtCenter = { lat: 39.9945, lng: -83.0627 };
+
+            // Initialize map
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: districtCenter,
+                mapTypeId: 'roadmap',
+                streetViewControl: false,
+                mapTypeControl: true,
+                fullscreenControl: true
+            });
+
+            // Initialize geocoder
+            geocoder = new google.maps.Geocoder();
+
+            // Initialize autocomplete
+            const input = document.getElementById('address-input');
+            autocomplete = new google.maps.places.Autocomplete(input, {
+                componentRestrictions: { country: 'us' },
+                fields: ['address_components', 'geometry', 'name', 'formatted_address'],
+                types: ['address']
+            });
+
+            // Bias autocomplete to Ohio
+            const ohioBounds = new google.maps.LatLngBounds(
+                new google.maps.LatLng(38.4, -84.8),
+                new google.maps.LatLng(42.3, -80.5)
+            );
+            autocomplete.setBounds(ohioBounds);
+
+            // Listen for place selection
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                if (place.geometry) {
+                    checkLocation(place.geometry.location, place.formatted_address);
+                }
+            });
+
+            // Allow Enter key to trigger search
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchAddress();
+                }
+            });
+
+            // Create polygon for district boundary
+            districtPolygon = new google.maps.Polygon({
+                paths: districtBoundary,
+                strokeColor: '#1a73e8',
+                strokeOpacity: 0.8,
+                strokeWeight: 3,
+                fillColor: '#1a73e8',
+                fillOpacity: 0.2
+            });
+            districtPolygon.setMap(map);
+
+            // Add markers for key cities
+            new google.maps.Marker({
+                position: { lat: 40.0272, lng: -83.0627 },
+                map: map,
+                title: 'Upper Arlington',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: '#1a73e8',
+                    fillOpacity: 0.8,
+                    strokeColor: 'white',
+                    strokeWeight: 2
+                }
+            });
+
+            new google.maps.Marker({
+                position: { lat: 39.9812, lng: -83.0408 },
+                map: map,
+                title: 'Grandview Heights',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: '#1a73e8',
+                    fillOpacity: 0.8,
+                    strokeColor: 'white',
+                    strokeWeight: 2
+                }
+            });
+
+            // Add info window
+            const infoWindow = new google.maps.InfoWindow({
+                content: '<div class="info-window">' +
+                        '<h3>Ohio State House District 7</h3>' +
+                        '<p><strong>Representative:</strong> C. Allison Russo (D)</p>' +
+                        '<p><strong>Includes:</strong></p>' +
+                        '<ul>' +
+                        '<li>Upper Arlington</li>' +
+                        '<li>Grandview Heights</li>' +
+                        '<li>Portions of Columbus</li>' +
+                        '</ul>' +
+                        '<p><strong>County:</strong> Franklin County</p>' +
+                        '</div>',
+                position: districtCenter
+            });
+            infoWindow.open(map);
+        }
+
+        function searchAddress() {
+            const address = document.getElementById('address-input').value.trim();
+            const resultDiv = document.getElementById('result-message');
+            const searchBtn = document.getElementById('search-btn');
+
+            if (!address) {
+                showMessage('Please enter an address to search.', 'error');
+                return;
+            }
+
+            // Show loading state
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="loading"></span>';
+            resultDiv.style.display = 'none';
+
+            // Geocode the address
+            geocoder.geocode({ 
+                address: address,
+                componentRestrictions: {
+                    country: 'US',
+                    administrativeArea: 'OH'
+                }
+            }, (results, status) => {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+
+                if (status === 'OK' && results[0]) {
+                    checkLocation(results[0].geometry.location, results[0].formatted_address);
+                } else {
+                    showMessage('Address not found. Please enter a valid Ohio address.', 'error');
+                }
+            });
+        }
+
+        function checkLocation(location, formattedAddress) {
+            // Remove previous marker if exists
+            if (searchMarker) {
+                searchMarker.setMap(null);
+            }
+
+            // Add marker for searched location
+            searchMarker = new google.maps.Marker({
+                position: location,
+                map: map,
+                animation: google.maps.Animation.DROP,
+                title: formattedAddress
+            });
+
+            // Center map on location
+            map.setCenter(location);
+            map.setZoom(15);
+
+            // Check if location is in district
+            const isInDistrict = google.maps.geometry.poly.containsLocation(
+                location,
+                districtPolygon
+            );
+
+            // Show result
+            if (isInDistrict) {
+                showMessage(
+                    '<strong>✓ You\'re in District 7!</strong> ' +
+                    'This address is within Ohio State House District 7, represented by C. Allison Russo.',
+                    'success'
+                );
+                searchMarker.setIcon({
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#4caf50',
+                    fillOpacity: 1,
+                    strokeColor: 'white',
+                    strokeWeight: 3
+                });
+            } else {
+                showMessage(
+                    '<strong>Not in District 7</strong> ' +
+                    'This address is not within Ohio State House District 7. To find your district, visit ' +
+                    '<a href="https://www.ohiohouse.gov/members/district-map" target="_blank" style="color: #c62828; text-decoration: underline;">ohiohouse.gov</a>',
+                    'info'
+                );
+                searchMarker.setIcon({
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: '#ff9800',
+                    fillOpacity: 1,
+                    strokeColor: 'white',
+                    strokeWeight: 3
+                });
+            }
+        }
+
+        function showMessage(message, type) {
+            const resultDiv = document.getElementById('result-message');
+            resultDiv.innerHTML = message;
+            resultDiv.className = 'result-message ' + type;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+    
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDRN5iTscj_TwgIZon0I3EFgVa_9PO5h_I&libraries=places,geometry&callback=initMap" async defer></script>
+</body>
+</html>
